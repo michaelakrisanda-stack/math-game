@@ -29,6 +29,7 @@ Tip: put a shortcut to the file on the desktop so your child can start it themse
 ## How the game encourages practice
 
 - Each round is 10 questions with a progress bar.
+- Stuck? The **💡 Hint button** teaches the strategy for that exact problem ("add the tens first: 30 + 50, then the ones…") without ever giving the answer. Hinted questions earn 5 points instead of 10, so there's still a reason to try solo first.
 - Correct answers earn points; 3+ in a row lights a 🔥 streak bonus.
 - Wrong answers gently show the correct one — no penalties, just encouragement.
 - Rounds end with 1–3 stars, confetti, and cheerful sounds.

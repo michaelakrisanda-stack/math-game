@@ -100,6 +100,22 @@
   .question-text { font-size: 2.6rem; font-weight: bold; color: #1f2937; letter-spacing: 2px; }
   .question-hint { font-size: 1rem; color: #7c3aed; margin-top: 8px; }
 
+  .hint-btn {
+    border: none; border-radius: 999px; padding: 10px 22px; margin-top: 12px;
+    font-family: inherit; font-size: 1rem; font-weight: bold; color: #92400e;
+    background: var(--yellow); cursor: pointer;
+    box-shadow: 0 4px 0 rgba(0,0,0,.18);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .hint-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.18); }
+  .hint-btn:disabled { opacity: .45; cursor: default; }
+  .hint-text {
+    margin-top: 12px; background: #fef9c3; border: 2px dashed #f59e0b;
+    border-radius: 14px; padding: 12px 14px; font-size: 1.05rem; color: #92400e;
+    line-height: 1.4; animation: hintIn .3s;
+  }
+  @keyframes hintIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
   .answers { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .answer-btn {
     border: none; border-radius: 18px; padding: 20px 8px;
@@ -186,6 +202,8 @@
   <div class="question-box">
     <div class="question-text" id="questionText"></div>
     <div class="question-hint" id="questionHint"></div>
+    <button class="hint-btn" id="hintBtn">💡 Hint</button>
+    <div class="hint-text hidden" id="hintText"></div>
   </div>
 
   <div class="answers" id="answers"></div>
@@ -266,7 +284,7 @@
       b = bTens * 10 + bOnes;
     }
     else { a = rand(15, 79); b = rand(6, 99 - a); }
-    return { text: a + " + " + b + " = ?", answer: a + b, hint: "" };
+    return { text: a + " + " + b + " = ?", answer: a + b, hint: "", type: "add", a: a, b: b };
   }
 
   function genSub(level) {
@@ -280,19 +298,20 @@
       b = bTens * 10 + bOnes;
     }
     else { a = rand(30, 99); b = rand(11, a - 5); }
-    return { text: a + " − " + b + " = ?", answer: a - b, hint: "" };
+    return { text: a + " − " + b + " = ?", answer: a - b, hint: "", type: "sub", a: a, b: b };
   }
 
   function genMissing(level) {
     var base = level === 1 ? genAdd(1) : (Math.random() < 0.5 ? genAdd(level) : genSub(level));
-    // rebuild: a op b = c, hide a or b
-    var m = base.text.match(/(\d+) ([+−]) (\d+)/);
-    var a = parseInt(m[1], 10), op = m[2], b = parseInt(m[3], 10);
-    var c = base.answer;
-    if (Math.random() < 0.5) {
-      return { text: "❓ " + op + " " + b + " = " + c, answer: a, hint: "What number goes in the box?" };
-    }
-    return { text: a + " " + op + " ❓ = " + c, answer: b, hint: "What number goes in the box?" };
+    var a = base.a, b = base.b, c = base.answer;
+    var op = base.type === "add" ? "+" : "−";
+    var hideFirst = Math.random() < 0.5;
+    return {
+      text: hideFirst ? "❓ " + op + " " + b + " = " + c : a + " " + op + " ❓ = " + c,
+      answer: hideFirst ? a : b,
+      hint: "What number goes in the box?",
+      type: "missing", op: op, hideFirst: hideFirst, a: a, b: b, c: c
+    };
   }
 
   function genCompare(level) {
@@ -305,7 +324,8 @@
       answer: answer,
       hint: "Pick the right sign!",
       choices: [">", "<", "="],
-      compare: true
+      compare: true,
+      type: "compare", a: a, b: b
     };
   }
 
@@ -317,8 +337,60 @@
     return {
       text: seq.join(", ") + ", ❓",
       answer: start + step * 3,
-      hint: "Keep counting by " + step + "s!"
+      hint: "Keep counting by " + step + "s!",
+      type: "skip", step: step, last: start + step * 2
     };
+  }
+
+  // ---------- hints: teach the strategy, never reveal the answer ----------
+  function tens(n) { return Math.floor(n / 10) * 10; }
+  function ones(n) { return n % 10; }
+
+  function getHint(q) {
+    if (q.type === "add") {
+      if (q.a <= 10 && q.b <= 10) {
+        var big = Math.max(q.a, q.b), small = Math.min(q.a, q.b);
+        return "Start at " + big + " and count up " + small + " more on your fingers!";
+      }
+      if (ones(q.a) === 0 && ones(q.b) === 0) {
+        return "Both numbers are tens! Think small: what is " + (q.a / 10) + " + " + (q.b / 10) + "? Now say it in tens!";
+      }
+      if (ones(q.a) + ones(q.b) > 9) {
+        return "The ones make more than 9! Add the tens first (" + tens(q.a) + " + " + tens(q.b) + "), then add the ones (" + ones(q.a) + " + " + ones(q.b) + "), and put the two together.";
+      }
+      return "Break it into tens and ones! Add the tens (" + tens(q.a) + " + " + tens(q.b) + "), then add the ones (" + ones(q.a) + " + " + ones(q.b) + ").";
+    }
+    if (q.type === "sub") {
+      if (q.a <= 20) {
+        return "Start at " + q.a + " and hop backwards " + q.b + " times!";
+      }
+      if (ones(q.b) === 0) {
+        return q.b + " is just tens! Start at " + q.a + " and count backwards by 10, " + (q.b / 10) + " times.";
+      }
+      if (ones(q.b) > ones(q.a)) {
+        return "Tricky one — you need to borrow! Try it in two hops: first do " + q.a + " − " + tens(q.b) + ", then take away " + ones(q.b) + " more.";
+      }
+      return "Take away the tens first: " + q.a + " − " + tens(q.b) + ". Then take away " + ones(q.b) + " more.";
+    }
+    if (q.type === "missing") {
+      if (q.op === "+") {
+        var known = q.hideFirst ? q.b : q.a;
+        return "The box and " + known + " must add up to " + q.c + ". Count up from " + known + " to " + q.c + " — how many hops did you take?";
+      }
+      if (q.hideFirst) {
+        return "Work backwards! The box lost " + q.b + " and became " + q.c + ". Put the " + q.b + " back by adding it to " + q.c + ".";
+      }
+      return "Find the gap! Count up from " + q.c + " to " + q.a + " — the number of hops is your answer.";
+    }
+    if (q.type === "compare") {
+      var da = String(q.a).length, db = String(q.b).length;
+      if (da !== db) return "Count the digits! A number with more digits is always bigger. Remember: the open mouth eats the bigger number!";
+      return "Compare the front digits first! If they match, look at the next digit. The open mouth always eats the bigger number.";
+    }
+    if (q.type === "skip") {
+      return "Each number jumps up by " + q.step + ". Make one more jump of " + q.step + " starting from " + q.last + "!";
+    }
+    return "Take your time — you've got this!";
   }
 
   var GENERATORS = {
@@ -365,7 +437,8 @@
     bestStreak: 0,
     correctCount: 0,
     current: null,
-    locked: false
+    locked: false,
+    hintUsed: false
   };
 
   var PRAISE = ["Awesome! 🎉", "You got it! ⭐", "Super! 🚀", "Brainpower! 🧠", "Amazing! 🌟", "Way to go! 🥳"];
@@ -402,9 +475,13 @@
   function nextQuestion() {
     if (state.qIndex >= QUESTIONS_PER_ROUND) { endGame(); return; }
     state.locked = false;
+    state.hintUsed = false;
     state.current = makeQuestion(state.topic, state.level);
     $("questionText").textContent = state.current.text;
     $("questionHint").textContent = state.current.hint || "";
+    $("hintBtn").disabled = false;
+    $("hintText").classList.add("hidden");
+    $("hintText").textContent = "";
     $("feedback").textContent = "";
     $("feedback").className = "feedback";
     $("progressFill").style.width = (state.qIndex / QUESTIONS_PER_ROUND * 100) + "%";
@@ -435,7 +512,7 @@
       state.correctCount++;
       state.streak++;
       if (state.streak > state.bestStreak) state.bestStreak = state.streak;
-      var points = 10 + (state.streak >= 3 ? 5 : 0);
+      var points = (state.hintUsed ? 5 : 10) + (state.streak >= 3 ? 5 : 0);
       state.score += points;
       fb.textContent = PRAISE[rand(0, PRAISE.length - 1)] + (state.streak >= 3 ? " 🔥 Streak bonus!" : "");
       fb.classList.add("good");
@@ -539,6 +616,15 @@
     }
   }
   updateBestBanner();
+
+  $("hintBtn").addEventListener("click", function () {
+    if (state.locked || !state.current) return;
+    state.hintUsed = true;
+    $("hintBtn").disabled = true;
+    $("hintText").textContent = "💡 " + getHint(state.current);
+    $("hintText").classList.remove("hidden");
+    beep(880, .12); beep(1175, .18, "sine", .1);
+  });
 
   $("quitBtn").addEventListener("click", function () { show("menuScreen"); updateBestBanner(); });
   $("againBtn").addEventListener("click", startGame);
